@@ -8,6 +8,7 @@ A security camera system that performs real-time object detection using OpenCV a
 - Remote access to your security camera feed from anywhere
 - Email notifications when specified objects are detected
 - Snapshot images attached to notification emails
+- View, download, and manage detection snapshots from the web interface
 - Configurable notification timeout to prevent alert flooding
 - FastAPI server with streaming capability
 - Cross-platform web client application
@@ -150,6 +151,32 @@ To modify the detection sensitivity:
 3. Lower values will detect more objects but may include more false positives
 4. Higher values will be more selective but might miss some objects
 
+## Snapshot Management
+
+OpenSentry automatically captures and saves snapshot images when objects are detected. These snapshots provide a visual record of detections that you can review, download, or manage directly from the web interface.
+
+### Viewing Snapshots
+
+The test application provides a complete interface for snapshot management:
+
+1. Connect to your server using the connection form
+2. Click "Load Snapshots" to display all detection snapshots
+3. A grid of thumbnail images will appear, sorted by capture time (newest first)
+4. Click on any thumbnail to open a detailed view with the following options:
+   - View the full-size image
+   - See detection details (object type, timestamp)
+   - Download the snapshot to your device
+   - Delete the snapshot from the server
+
+### Managing Snapshots
+
+- **Viewing**: Click any snapshot thumbnail to view details
+- **Downloading**: Use the download button in the detail view to save snapshots locally
+- **Deleting**: You can delete individual snapshots or use the "Delete All" button to remove all snapshots
+- **Organization**: Snapshots are automatically organized by detection type and timestamp
+
+All snapshots are stored in the `snapshots` directory on the server, with filenames that encode both the detected object type and capture time.
+
 ## Email Notifications
 
 OpenSentry can send you email alerts with snapshot images when specified objects are detected in your security camera feed. This feature is highly configurable:
@@ -209,6 +236,10 @@ The FastAPI server exposes the following endpoints:
 - `GET /`: API information and available endpoints
 - `GET /stream`: Live video stream with object detection (MJPEG format)
 - `GET /status`: Server status and detection configuration information
+- `GET /snapshots`: List all detection snapshots with metadata
+- `GET /static/snapshots/{filename}`: View/download specific snapshot images
+- `DELETE /snapshots/{filename}`: Delete a specific snapshot
+- `DELETE /snapshots`: Delete all snapshots
 
 ## Raspberry Pi Deployment
 
