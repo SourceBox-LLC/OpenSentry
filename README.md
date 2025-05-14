@@ -1,24 +1,31 @@
-# Real-Time Object Detection with OpenCV and YOLOv3
+# OpenSentry: Real-Time Object Detection Security System
 
-A computer vision application that performs real-time object detection using OpenCV and the YOLOv3 model. The system can detect multiple objects simultaneously from a webcam feed, highlighting them with bounding boxes and displaying confidence scores. Users can customize which objects to detect through a simple setup process.
+A security camera system that performs real-time object detection using OpenCV and the YOLOv3 model. The system can detect multiple objects simultaneously from a webcam feed, highlighting them with bounding boxes and displaying confidence scores. Now featuring a FastAPI server for remote access to your security feed from anywhere with an internet connection. Users can customize which objects to detect through a simple setup process.
 
 ## Features
 
 - Live webcam-based object detection
+- Remote access to your security camera feed from anywhere
+- FastAPI server with streaming capability
+- Cross-platform web client application
 - Customizable object detection (choose up to 10 classes)
 - Interactive setup wizard for selecting detection targets
 - Real-time bounding box visualization
 - Confidence score display
 - FPS counter to monitor performance
 - Dynamic color assignment for different object types
+- CORS support for cross-origin access
 
 ## Requirements
 
 - Python 3.6+
 - OpenCV
 - NumPy
+- FastAPI
+- Uvicorn
 - python-dotenv
 - Webcam or camera device
+- For remote access: Internet connection and port forwarding
 
 ## Installation
 
@@ -49,6 +56,8 @@ A computer vision application that performs real-time object detection using Ope
 
 ## Usage
 
+### Local Detection Mode
+
 1. Make sure your camera is connected
 
 2. (Optional) Run the setup wizard to customize which objects to detect:
@@ -58,7 +67,7 @@ A computer vision application that performs real-time object detection using Ope
    - Follow the prompts to select up to 10 object classes
    - Your selections will be saved to a `.env` file
 
-3. Run the detection script:
+3. Run the detection script in local mode:
    ```
    python app.py
    ```
@@ -66,6 +75,21 @@ A computer vision application that performs real-time object detection using Ope
 4. A window will open showing the live camera feed with object detection
 
 5. Press 'q' to quit the application
+
+### Remote Access Server Mode
+
+1. Make sure your camera is connected
+
+2. Run the FastAPI server:
+   ```
+   python server.py
+   ```
+
+3. The server will start on port 8000 and make your camera feed available over your network or internet
+
+4. Access your camera feed by opening a web browser and navigating to:
+   - Local network: `http://your-computer-ip:8000/stream`
+   - Or use the provided test application in the `test-app` folder
 
 
 
@@ -123,6 +147,46 @@ To modify the detection sensitivity:
 3. Lower values will detect more objects but may include more false positives
 4. Higher values will be more selective but might miss some objects
 
+## Remote Access Configuration
+
+### Using the Test Application
+
+A web-based test application is included in the `test-app` directory that demonstrates how to view your security camera feed from anywhere.
+
+1. Open the `test-app/index.html` file in a web browser
+2. Enter your server URL (e.g., `http://your-computer-ip:8000` or your public IP/domain)
+3. Click "Connect" to view your security camera feed
+
+### Making Your Server Internet-Accessible
+
+To access your OpenSentry server from anywhere on the internet, you have several options:
+
+1. **Port Forwarding**: Configure your router to forward port 8000 to the device running the OpenSentry server
+   - You'll need to use your public IP address to connect
+   - Consider using a dynamic DNS service if your IP changes frequently
+
+2. **VPN**: Set up a VPN server on your network and connect to it first before accessing your local OpenSentry server
+
+3. **Reverse Proxy Services**: Use services like ngrok to create a secure tunnel to your local server
+
+### API Endpoints
+
+The FastAPI server exposes the following endpoints:
+
+- `GET /`: API information and available endpoints
+- `GET /stream`: Live video stream with object detection (MJPEG format)
+- `GET /status`: Server status and detection configuration information
+
+## Raspberry Pi Deployment
+
+This application can be deployed on a Raspberry Pi with a connected camera for a dedicated security system:
+
+1. Install the required dependencies on your Raspberry Pi
+2. Connect your Raspberry Pi camera module
+3. Run the server application: `python server.py`
+4. Configure port forwarding on your router if needed for remote access
+5. Use the test application from any device to view your security feed
+
 ## License
 
 This project is provided for educational purposes.
@@ -131,3 +195,4 @@ This project is provided for educational purposes.
 
 - YOLOv3 by Joseph Redmon and Ali Farhadi
 - OpenCV community
+- FastAPI framework

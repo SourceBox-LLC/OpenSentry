@@ -2,8 +2,16 @@ import cv2
 import numpy as np
 import time
 import os
+import threading
+import io
+from fastapi import FastAPI, Response
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Iterator, Dict, Any
 from dotenv import load_dotenv, find_dotenv
+import uvicorn
 
+# Class for object detection from the original app
 class ObjectDetector:
     def __init__(self):
         # Path to YOLO weights and configuration
@@ -122,40 +130,173 @@ class ObjectDetector:
         
         return frame
 
-def main():
+# Define the lifespan context manager for events
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: create background task for camera management
+    def check_camera_usage():
+        while True:
+            release_camera()
+            time.sleep(10)  # Check every 10 seconds
+    
+    # Start the thread
+    camera_thread = threading.Thread(target=check_camera_usage, daemon=True)
+    camera_thread.start()
+    
+    # Yield control back to FastAPI
+    yield
+    
+    # Shutdown logic (if needed)
+    global camera
+    if camera is not None:
+        with camera_lock:
+            camera.release()
+            camera = None
+            print("Camera released during shutdown")
+
+# Create FastAPI app with lifespan
+app = FastAPI(
+    title="OpenSentry API", 
+    description="Security Camera API with object detection",
+    lifespan=lifespan
+)
+
+# Allow cross-origin requests to access the API from any domain
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+)
+
+# Global variables for camera handling
+camera = None
+camera_lock = threading.Lock()
+last_access = time.time()
+
+def get_camera():
+    """
+    Get camera with thread-safe access
+    """
+    global camera
+    with camera_lock:
+        if camera is None:
+            camera = cv2.VideoCapture(0)
+    return camera
+
+def release_camera():
+    """
+    Release camera resources if not used for a while
+    """
+    global camera, last_access
+    if camera is not None and time.time() - last_access > 60:  # Release after 60 seconds of inactivity
+        with camera_lock:
+            if camera is not None:
+                camera.release()
+                camera = None
+                print("Camera released due to inactivity")
+
+def generate_frames() -> Iterator[bytes]:
+    """
+    Generate frames from the camera feed with object detection
+    """
+    global last_access
+    detector = ObjectDetector()
+    
+    while True:
+        # Update the last access time
+        last_access = time.time()
+        
+        # Get camera
+        cap = get_camera()
+        
+        # Read frame
+        success, frame = cap.read()
+        if not success:
+            print("Failed to grab frame")
+            break
+            
+        # Process frame with object detection
+        processed_frame = detector.detect_objects(frame)
+        
+        # Encode as JPEG
+        ret, buffer = cv2.imencode('.jpg', processed_frame)
+        if not ret:
+            continue
+            
+        # Convert to bytes
+        frame_bytes = buffer.tobytes()
+        
+        # Yield frame in MJPEG format
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        
+        # Small delay to control frame rate
+        time.sleep(0.03)  # ~30fps
+
+# API endpoints
+@app.get("/")
+async def root():
+    """
+    Root endpoint with API info
+    """
+    return {
+        "name": "OpenSentry API",
+        "version": "1.0.0",
+        "description": "Security Camera API with object detection",
+        "endpoints": [
+            {
+                "path": "/stream",
+                "description": "Stream the camera feed with object detection"
+            },
+            {
+                "path": "/status",
+                "description": "Get API status"
+            }
+        ]
+    }
+
+@app.get("/stream")
+async def stream():
+    """
+    Stream video feed as MJPEG
+    """
+    return StreamingResponse(
+        generate_frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+@app.get("/status")
+async def status() -> Dict[str, Any]:
+    """
+    Get API status
+    """
+    return {
+        "status": "online",
+        "timestamp": time.time(),
+        "detecting": os.environ.get('DETECTION_LABELS', 'person').split(',')
+    }
+
+# Lifespan handler is defined at the top of the file
+
+if __name__ == "__main__":
     # Check if .env file exists with detection labels
     if not os.path.exists('.env'):
         print("WARNING: No .env file found with detection labels.")
         print("Run 'python setup.py' first to configure which objects to detect.")
         print("Proceeding with default configuration (detecting 'person' only)...")
     
-    # Initialize detector
-    detector = ObjectDetector()
+    # Run the FastAPI app with uvicorn
+    print("Starting OpenSentry API server...")
+    print("To access from other devices on your network or internet, use your IP address/domain")
+    print("Stream URL: http://your-ip:8000/stream")
     
-    # Open webcam
-    cap = cv2.VideoCapture(0)
-    
-    while True:
-        # Read frame
-        ret, frame = cap.read()
-        
-        if not ret:
-            print("Failed to grab frame")
-            break
-        
-        # Detect objects in the frame
-        processed_frame = detector.detect_objects(frame)
-        
-        # Display result
-        cv2.imshow("Object Detection", processed_frame)
-        
-        # Break loop on 'q' press
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-    
-    # Release resources
-    cap.release()
-    cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    main()
+    uvicorn.run(
+        "server:app", 
+        host="0.0.0.0",  # Make server available on network
+        port=8000, 
+        reload=False
+    )
