@@ -73,6 +73,71 @@
                 <h2>Detection Information</h2>
                 <div id="detection-status">Not connected to server</div>
             </div>
+            
+            <div class="snapshots-container">
+                <div class="snapshots-header">
+                    <h2>Detection Snapshots</h2>
+                    <div class="snapshots-controls">
+                        <button id="load-snapshots-btn" class="btn btn-primary">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                            </svg>
+                            Load Snapshots
+                        </button>
+                        <button id="delete-all-btn" class="btn btn-danger" disabled>
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                            </svg>
+                            Delete All
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="snapshots-grid" id="snapshots-grid">
+                    <div class="snapshots-loading" id="snapshots-loading">
+                        <div class="loading-spinner"></div>
+                        <p>Loading snapshots...</p>
+                    </div>
+                    <div class="no-snapshots" id="no-snapshots">
+                        <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                            <path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h4.05l1.83-2h4.24l1.83 2H20v12zM12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/>
+                        </svg>
+                        <p>No snapshots found</p>
+                    </div>
+                    <!-- Snapshot items will be inserted here -->
+                </div>
+                
+                <div class="snapshot-detail-modal" id="snapshot-modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3 id="modal-title">Snapshot Detail</h3>
+                            <button id="close-modal-btn" class="btn-close">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <img id="modal-image" src="" alt="Snapshot">
+                            <div class="snapshot-info" id="modal-info">
+                                <p><strong>Object:</strong> <span id="modal-object"></span></p>
+                                <p><strong>Time:</strong> <span id="modal-time"></span></p>
+                                <p><strong>File:</strong> <span id="modal-filename"></span></p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <a id="download-snapshot-btn" class="btn btn-primary" download>
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                                </svg>
+                                Download
+                            </a>
+                            <button id="delete-snapshot-btn" class="btn btn-danger">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                </svg>
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
 
         <footer>

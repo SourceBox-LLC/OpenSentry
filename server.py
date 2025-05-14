@@ -4,8 +4,12 @@ import time
 import os
 import threading
 import io
-from fastapi import FastAPI, Response, Request
-from fastapi.responses import StreamingResponse
+import glob
+import json
+from pathlib import Path
+from fastapi import FastAPI, Response, Request, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Iterator, Dict, Any, List
 from dotenv import load_dotenv, find_dotenv
@@ -13,6 +17,9 @@ import uvicorn
 
 # Import notification manager
 from notification import notification_manager
+
+# Create snapshots directory if it doesn't exist
+os.makedirs('snapshots', exist_ok=True)
 
 # Class for object detection from the original app
 class ObjectDetector:
@@ -199,6 +206,9 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+# Mount the snapshots directory as a static files directory
+app.mount("/static/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
+
 # Global variables for camera handling
 camera = None
 camera_lock = threading.Lock()
@@ -305,6 +315,11 @@ async def status() -> Dict[str, Any]:
     recipient = os.environ.get('RECIPIENT_EMAIL', 'Not configured')
     timeout = os.environ.get('NOTIFICATION_TIMEOUT', '300')
     
+    # Count snapshots
+    snapshot_count = 0
+    if os.path.exists('snapshots'):
+        snapshot_count = len(glob.glob('snapshots/*.jpg'))
+    
     return {
         "status": "online",
         "timestamp": time.time(),
@@ -312,9 +327,109 @@ async def status() -> Dict[str, Any]:
         "notifications": {
             "email_enabled": email_enabled,
             "recipient": recipient if email_enabled else None,
-            "timeout": timeout if email_enabled else None
+            "timeout": timeout if email_enabled else None,
+            "snapshot_count": snapshot_count
         }
     }
+
+@app.get("/snapshots")
+async def list_snapshots() -> Dict[str, Any]:
+    """
+    List all snapshot images
+    """
+    snapshots_dir = 'snapshots'
+    if not os.path.exists(snapshots_dir):
+        return {"snapshots": [], "count": 0}
+    
+    # Get all JPG files in the snapshots directory
+    snapshot_files = glob.glob(f"{snapshots_dir}/*.jpg")
+    
+    # Sort by modification time (newest first)
+    snapshot_files.sort(key=os.path.getmtime, reverse=True)
+    
+    snapshots = []
+    for file_path in snapshot_files:
+        file_name = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path)
+        mod_time = os.path.getmtime(file_path)
+        
+        # Parse detection info from filename (format: object_timestamp.jpg)
+        parts = os.path.splitext(file_name)[0].split('_')
+        detected_object = parts[0] if len(parts) > 0 else "unknown"
+        
+        snapshots.append({
+            "filename": file_name,
+            "path": file_path,
+            "size": file_size,
+            "timestamp": mod_time,
+            "detected_object": detected_object,
+            "url": f"/static/snapshots/{file_name}"
+        })
+    
+    return {"snapshots": snapshots, "count": len(snapshots)}
+
+@app.get("/snapshots/{filename}")
+async def get_snapshot(filename: str):
+    """
+    Download a snapshot image
+    """
+    # Validate filename to prevent directory traversal attacks
+    if '/' in filename or '\\' in filename or '..' in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    file_path = os.path.join('snapshots', filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    return FileResponse(file_path, filename=filename)
+
+@app.delete("/snapshots/{filename}")
+async def delete_snapshot(filename: str, background_tasks: BackgroundTasks):
+    """
+    Delete a snapshot image
+    """
+    # Validate filename to prevent directory traversal attacks
+    if '/' in filename or '\\' in filename or '..' in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    file_path = os.path.join('snapshots', filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    # Delete file in background to avoid blocking
+    def remove_file(path: str):
+        try:
+            os.remove(path)
+        except Exception as e:
+            print(f"Error deleting file {path}: {str(e)}")
+    
+    background_tasks.add_task(remove_file, file_path)
+    
+    return {"success": True, "message": f"Deleted {filename}"}
+
+@app.delete("/snapshots")
+async def delete_all_snapshots(background_tasks: BackgroundTasks):
+    """
+    Delete all snapshot images
+    """
+    snapshots_dir = 'snapshots'
+    if not os.path.exists(snapshots_dir):
+        return {"success": True, "message": "No snapshots to delete"}
+    
+    # Get all JPG files in the snapshots directory
+    snapshot_files = glob.glob(f"{snapshots_dir}/*.jpg")
+    
+    # Delete files in background
+    def remove_files(paths: List[str]):
+        for path in paths:
+            try:
+                os.remove(path)
+            except Exception as e:
+                print(f"Error deleting file {path}: {str(e)}")
+    
+    background_tasks.add_task(remove_files, snapshot_files)
+    
+    return {"success": True, "message": f"Deleting {len(snapshot_files)} snapshots"}
 
 # Lifespan handler is defined at the top of the file
 

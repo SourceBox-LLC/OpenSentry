@@ -1,5 +1,8 @@
 // OpenSentry Remote Viewer Application
 document.addEventListener('DOMContentLoaded', () => {
+    // Snapshots management state
+    let snapshots = [];
+    let currentSnapshot = null;
     // DOM Elements
     const cameraFeed = document.getElementById('camera-feed');
     const serverUrlInput = document.getElementById('server-url');
@@ -13,6 +16,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorOverlay = document.getElementById('error-overlay');
     const serverStatus = document.getElementById('server-status');
     const detectionStatus = document.getElementById('detection-status');
+    
+    // Snapshot DOM Elements
+    const loadSnapshotsBtn = document.getElementById('load-snapshots-btn');
+    const deleteAllBtn = document.getElementById('delete-all-btn');
+    const snapshotsGrid = document.getElementById('snapshots-grid');
+    const snapshotsLoading = document.getElementById('snapshots-loading');
+    const noSnapshotsEl = document.getElementById('no-snapshots');
+    const snapshotModal = document.getElementById('snapshot-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const modalTitle = document.getElementById('modal-title');
+    const modalImage = document.getElementById('modal-image');
+    const modalObject = document.getElementById('modal-object');
+    const modalTime = document.getElementById('modal-time');
+    const modalFilename = document.getElementById('modal-filename');
+    const downloadSnapshotBtn = document.getElementById('download-snapshot-btn');
+    const deleteSnapshotBtn = document.getElementById('delete-snapshot-btn');
 
     // State
     let serverUrl = '';
@@ -40,6 +59,19 @@ document.addEventListener('DOMContentLoaded', () => {
             connectToServer();
         }, 500);
     }
+    
+    // Event listeners for snapshot management
+    loadSnapshotsBtn.addEventListener('click', loadSnapshots);
+    deleteAllBtn.addEventListener('click', confirmDeleteAllSnapshots);
+    closeModalBtn.addEventListener('click', closeSnapshotModal);
+    deleteSnapshotBtn.addEventListener('click', deleteCurrentSnapshot);
+    
+    // Close modal when clicking outside of it
+    snapshotModal.addEventListener('click', (e) => {
+        if (e.target === snapshotModal) {
+            closeSnapshotModal();
+        }
+    });
 
     // Connect to the specified server
     function connectToServer() {
@@ -257,5 +289,198 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         
         detectionStatus.innerHTML = detectionHTML;
+    }
+    
+    // Load snapshots from server
+    async function loadSnapshots() {
+        if (!serverUrl) {
+            updateServerStatus('Please connect to a server first', 'error');
+            return;
+        }
+        
+        // Show loading state
+        snapshotsLoading.style.display = 'flex';
+        noSnapshotsEl.style.display = 'none';
+        // Clear existing snapshots
+        const existingSnapshots = snapshotsGrid.querySelectorAll('.snapshot-item');
+        existingSnapshots.forEach(item => item.remove());
+        
+        try {
+            const response = await fetch(`${serverUrl}/snapshots`);
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+            
+            const data = await response.json();
+            snapshots = data.snapshots || [];
+            
+            // Hide loading state
+            snapshotsLoading.style.display = 'none';
+            
+            // Show no snapshots message if needed
+            if (snapshots.length === 0) {
+                noSnapshotsEl.style.display = 'flex';
+                deleteAllBtn.disabled = true;
+                return;
+            }
+            
+            // Enable delete all button if we have snapshots
+            deleteAllBtn.disabled = false;
+            
+            // Render snapshots
+            renderSnapshots();
+            
+        } catch (error) {
+            console.error('Error loading snapshots:', error);
+            snapshotsLoading.style.display = 'none';
+            noSnapshotsEl.style.display = 'flex';
+            noSnapshotsEl.innerHTML = `
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                </svg>
+                <p>Error loading snapshots: ${error.message}</p>
+            `;
+        }
+    }
+    
+    // Render snapshots in the grid
+    function renderSnapshots() {
+        snapshots.forEach(snapshot => {
+            const item = document.createElement('div');
+            item.className = 'snapshot-item';
+            item.dataset.filename = snapshot.filename;
+            
+            // Format timestamp
+            const date = new Date(snapshot.timestamp * 1000);
+            const formattedDate = date.toLocaleString();
+            
+            item.innerHTML = `
+                <img src="${serverUrl}/static/snapshots/${snapshot.filename}" alt="${snapshot.detected_object}">
+                <div class="snapshot-info">
+                    <div class="snapshot-object">${snapshot.detected_object}</div>
+                    <div class="snapshot-time">${formattedDate}</div>
+                </div>
+            `;
+            
+            // Add click event to open modal
+            item.addEventListener('click', () => openSnapshotModal(snapshot));
+            
+            snapshotsGrid.appendChild(item);
+        });
+    }
+    
+    // Open modal with snapshot details
+    function openSnapshotModal(snapshot) {
+        currentSnapshot = snapshot;
+        
+        // Format timestamp
+        const date = new Date(snapshot.timestamp * 1000);
+        const formattedDate = date.toLocaleString();
+        
+        // Set modal content
+        modalTitle.textContent = `${snapshot.detected_object} Detection`;
+        modalImage.src = `${serverUrl}/static/snapshots/${snapshot.filename}`;
+        modalObject.textContent = snapshot.detected_object;
+        modalTime.textContent = formattedDate;
+        modalFilename.textContent = snapshot.filename;
+        
+        // Set download link
+        downloadSnapshotBtn.href = `${serverUrl}/static/snapshots/${snapshot.filename}`;
+        downloadSnapshotBtn.download = snapshot.filename;
+        
+        // Show modal
+        snapshotModal.style.display = 'flex';
+        
+        // Add body class to prevent scrolling
+        document.body.classList.add('modal-open');
+    }
+    
+    // Close snapshot modal
+    function closeSnapshotModal() {
+        snapshotModal.style.display = 'none';
+        currentSnapshot = null;
+        
+        // Remove body class to allow scrolling
+        document.body.classList.remove('modal-open');
+    }
+    
+    // Delete current snapshot
+    async function deleteCurrentSnapshot() {
+        if (!currentSnapshot) return;
+        
+        try {
+            const response = await fetch(`${serverUrl}/snapshots/${currentSnapshot.filename}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+            
+            // Close modal
+            closeSnapshotModal();
+            
+            // Remove snapshot from UI
+            const snapshotEl = snapshotsGrid.querySelector(`[data-filename="${currentSnapshot.filename}"]`);
+            if (snapshotEl) {
+                snapshotEl.remove();
+            }
+            
+            // Remove from snapshots array
+            snapshots = snapshots.filter(s => s.filename !== currentSnapshot.filename);
+            
+            // Show no snapshots message if needed
+            if (snapshots.length === 0) {
+                noSnapshotsEl.style.display = 'flex';
+                deleteAllBtn.disabled = true;
+            }
+            
+            // Show success message
+            updateServerStatus(`Deleted snapshot: ${currentSnapshot.filename}`, 'success');
+            
+        } catch (error) {
+            console.error('Error deleting snapshot:', error);
+            updateServerStatus(`Error deleting snapshot: ${error.message}`, 'error');
+        }
+    }
+    
+    // Confirm and delete all snapshots
+    function confirmDeleteAllSnapshots() {
+        if (snapshots.length === 0) return;
+        
+        if (confirm(`Are you sure you want to delete all ${snapshots.length} snapshots? This cannot be undone.`)) {
+            deleteAllSnapshots();
+        }
+    }
+    
+    // Delete all snapshots
+    async function deleteAllSnapshots() {
+        try {
+            const response = await fetch(`${serverUrl}/snapshots`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+            
+            // Clear UI
+            const existingSnapshots = snapshotsGrid.querySelectorAll('.snapshot-item');
+            existingSnapshots.forEach(item => item.remove());
+            
+            // Clear snapshots array
+            snapshots = [];
+            
+            // Show no snapshots message
+            noSnapshotsEl.style.display = 'flex';
+            deleteAllBtn.disabled = true;
+            
+            // Show success message
+            updateServerStatus('All snapshots deleted successfully', 'success');
+            
+        } catch (error) {
+            console.error('Error deleting all snapshots:', error);
+            updateServerStatus(`Error deleting all snapshots: ${error.message}`, 'error');
+        }
     }
 });
