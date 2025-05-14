@@ -1,0 +1,48 @@
+# Environment variables and virtual environments
+.env
+venv
+env/
+.venv/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Model files (can be large)
+*.weights
+*.pt
+*.pb
+*.onnx
+*.tflite
+*.pth
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Logs and debugging
+*.log
+*.prof
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Test coverage
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
