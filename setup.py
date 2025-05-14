@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
+import re
 import cv2
 import numpy as np
 from dotenv import load_dotenv, find_dotenv
@@ -88,8 +89,92 @@ def setup_detection_labels():
         print("Setup cancelled. No changes were made.")
         return False
     
-    # Create or update .env file
-    env_content = f"DETECTION_LABELS={','.join(selected_classes)}"
+        # Ask if user wants to configure email notifications
+    print("\n===== Email Notification Setup =====")
+    print("Would you like to configure email notifications for detected objects?")
+    setup_email = input("Configure email notifications? (y/n): ").strip().lower() == 'y'
+    
+    # Load existing .env content if available
+    existing_env = {}
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            for line in f:
+                if '=' in line:
+                    key, value = line.strip().split('=', 1)
+                    existing_env[key] = value
+    
+    # Set the detection labels
+    existing_env['DETECTION_LABELS'] = ','.join(selected_classes)
+    
+    if setup_email:
+        # Email notification config
+        print("\nEmail notification setup:")
+        print("This will allow OpenSentry to send you email alerts when objects are detected.")
+        print("Note: For Gmail, you need to create an 'App Password' in your Google Account settings.")
+        
+        # Enable/disable email notifications
+        existing_env['EMAIL_NOTIFICATIONS'] = 'true'
+        
+        # Email credentials
+        sender_email = input("\nSender email address: ").strip()
+        while not re.match(r"[^@]+@[^@]+\.[^@]+", sender_email):
+            print("Invalid email format. Please enter a valid email address.")
+            sender_email = input("Sender email address: ").strip()
+        existing_env['SENDER_EMAIL'] = sender_email
+        
+        sender_password = input("Email password or app password: ").strip()
+        existing_env['SENDER_PASSWORD'] = sender_password
+        
+        recipient_email = input("\nRecipient email address (where to send alerts): ").strip()
+        while not re.match(r"[^@]+@[^@]+\.[^@]+", recipient_email):
+            print("Invalid email format. Please enter a valid email address.")
+            recipient_email = input("Recipient email address: ").strip()
+        existing_env['RECIPIENT_EMAIL'] = recipient_email
+        
+        # SMTP server settings (with defaults for common providers)
+        print("\nSMTP Server Settings:")
+        print("Common settings:")
+        print("1. Gmail: smtp.gmail.com:587")
+        print("2. Outlook/Hotmail: smtp-mail.outlook.com:587")
+        print("3. Yahoo: smtp.mail.yahoo.com:587")
+        print("4. Custom")
+        
+        smtp_choice = input("Choose SMTP provider (1-4): ").strip()
+        if smtp_choice == '1':
+            existing_env['SMTP_SERVER'] = 'smtp.gmail.com'
+            existing_env['SMTP_PORT'] = '587'
+        elif smtp_choice == '2':
+            existing_env['SMTP_SERVER'] = 'smtp-mail.outlook.com'
+            existing_env['SMTP_PORT'] = '587'
+        elif smtp_choice == '3':
+            existing_env['SMTP_SERVER'] = 'smtp.mail.yahoo.com'
+            existing_env['SMTP_PORT'] = '587'
+        else:
+            smtp_server = input("SMTP server address: ").strip()
+            smtp_port = input("SMTP port: ").strip()
+            existing_env['SMTP_SERVER'] = smtp_server
+            existing_env['SMTP_PORT'] = smtp_port
+        
+        # Notification timeout
+        print("\nNotification Timeout:")
+        print("This is the minimum time between notifications for the same object.")
+        print("Default is 300 seconds (5 minutes).")
+        
+        try:
+            timeout = int(input("Notification timeout in seconds: ").strip() or "300")
+            if timeout < 10:
+                print("Timeout too short. Setting to minimum of 10 seconds.")
+                timeout = 10
+            existing_env['NOTIFICATION_TIMEOUT'] = str(timeout)
+        except ValueError:
+            print("Invalid input. Using default of 300 seconds.")
+            existing_env['NOTIFICATION_TIMEOUT'] = '300'
+    else:
+        # Disable email notifications if user chooses not to set them up
+        existing_env['EMAIL_NOTIFICATIONS'] = 'false'
+        
+    # Create or update .env file content
+    env_content = '\n'.join([f"{key}={value}" for key, value in existing_env.items()])
     
     with open(env_path, 'w') as f:
         f.write(env_content)
@@ -100,5 +185,119 @@ def setup_detection_labels():
     
     return True
 
+def main():
+    # Main setup function
+    print("\n===== OpenSentry Configuration Wizard =====\n")
+    print("This wizard will help you configure OpenSentry for your needs.")
+    print("1. Configure object detection")
+    print("2. Configure email notifications")
+    print("3. Configure both")
+    print("4. Exit")
+    
+    choice = input("\nEnter your choice (1-4): ").strip()
+    
+    if choice == '1':
+        setup_detection_labels()
+    elif choice == '2':
+        setup_email_notifications()
+    elif choice == '3':
+        setup_detection_labels()
+        setup_email_notifications()
+    else:
+        print("Setup canceled.")
+        return
+
+def setup_email_notifications():
+    """Setup email notification configuration"""
+    print("\n===== Email Notification Setup =====")
+    
+    # Load existing configuration if available
+    env_path = '.env'
+    load_dotenv(find_dotenv(filename=env_path, usecwd=True))
+    
+    # Load existing .env content if available
+    existing_env = {}
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            for line in f:
+                if '=' in line:
+                    key, value = line.strip().split('=', 1)
+                    existing_env[key] = value
+    
+    # Show current email settings if any
+    if 'EMAIL_NOTIFICATIONS' in existing_env and existing_env['EMAIL_NOTIFICATIONS'] == 'true':
+        print("Current email notification settings:")
+        print(f"Recipient: {existing_env.get('RECIPIENT_EMAIL', 'Not set')}")
+        print(f"SMTP Server: {existing_env.get('SMTP_SERVER', 'Not set')}")
+        print(f"Notification timeout: {existing_env.get('NOTIFICATION_TIMEOUT', '300')} seconds")
+    
+    # Enable/disable email notifications
+    existing_env['EMAIL_NOTIFICATIONS'] = 'true'
+    
+    # Email credentials
+    sender_email = input("\nSender email address: ").strip()
+    while not re.match(r"[^@]+@[^@]+\.[^@]+", sender_email):
+        print("Invalid email format. Please enter a valid email address.")
+        sender_email = input("Sender email address: ").strip()
+    existing_env['SENDER_EMAIL'] = sender_email
+    
+    sender_password = input("Email password or app password: ").strip()
+    existing_env['SENDER_PASSWORD'] = sender_password
+    
+    recipient_email = input("\nRecipient email address (where to send alerts): ").strip()
+    while not re.match(r"[^@]+@[^@]+\.[^@]+", recipient_email):
+        print("Invalid email format. Please enter a valid email address.")
+        recipient_email = input("Recipient email address: ").strip()
+    existing_env['RECIPIENT_EMAIL'] = recipient_email
+    
+    # SMTP server settings (with defaults for common providers)
+    print("\nSMTP Server Settings:")
+    print("Common settings:")
+    print("1. Gmail: smtp.gmail.com:587")
+    print("2. Outlook/Hotmail: smtp-mail.outlook.com:587")
+    print("3. Yahoo: smtp.mail.yahoo.com:587")
+    print("4. Custom")
+    
+    smtp_choice = input("Choose SMTP provider (1-4): ").strip()
+    if smtp_choice == '1':
+        existing_env['SMTP_SERVER'] = 'smtp.gmail.com'
+        existing_env['SMTP_PORT'] = '587'
+    elif smtp_choice == '2':
+        existing_env['SMTP_SERVER'] = 'smtp-mail.outlook.com'
+        existing_env['SMTP_PORT'] = '587'
+    elif smtp_choice == '3':
+        existing_env['SMTP_SERVER'] = 'smtp.mail.yahoo.com'
+        existing_env['SMTP_PORT'] = '587'
+    else:
+        smtp_server = input("SMTP server address: ").strip()
+        smtp_port = input("SMTP port: ").strip()
+        existing_env['SMTP_SERVER'] = smtp_server
+        existing_env['SMTP_PORT'] = smtp_port
+    
+    # Notification timeout
+    print("\nNotification Timeout:")
+    print("This is the minimum time between notifications for the same object.")
+    print("Default is 300 seconds (5 minutes).")
+    
+    try:
+        timeout = int(input("Notification timeout in seconds: ").strip() or "300")
+        if timeout < 10:
+            print("Timeout too short. Setting to minimum of 10 seconds.")
+            timeout = 10
+        existing_env['NOTIFICATION_TIMEOUT'] = str(timeout)
+    except ValueError:
+        print("Invalid input. Using default of 300 seconds.")
+        existing_env['NOTIFICATION_TIMEOUT'] = '300'
+    
+    # Create or update .env file content
+    env_content = '\n'.join([f"{key}={value}" for key, value in existing_env.items()])
+    
+    with open(env_path, 'w') as f:
+        f.write(env_content)
+    
+    print(f"\nEmail notification configuration saved to {env_path}")
+    print("You will now receive email alerts when specified objects are detected.")
+    return True
+
 if __name__ == "__main__":
-    setup_detection_labels()
+    main()

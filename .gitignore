@@ -4,6 +4,8 @@ venv
 env/
 .venv/
 
+snapshots/
+
 # Python bytecode
 __pycache__/
 *.py[cod]

@@ -4,12 +4,15 @@ import time
 import os
 import threading
 import io
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Iterator, Dict, Any
+from typing import Iterator, Dict, Any, List
 from dotenv import load_dotenv, find_dotenv
 import uvicorn
+
+# Import notification manager
+from notification import notification_manager
 
 # Class for object detection from the original app
 class ObjectDetector:
@@ -82,6 +85,9 @@ class ObjectDetector:
         confidences = []
         boxes = []
         
+        # List to track detected objects for notifications
+        detected_objects = []
+        
         # Process detections
         for out in outs:
             for detection in out:
@@ -105,9 +111,19 @@ class ObjectDetector:
                     boxes.append([x, y, w, h])
                     confidences.append(float(confidence))
                     class_ids.append(class_id)
+                    
+                    # Add to detected objects for notification
+                    detected_objects.append({
+                        'name': self.classes[class_id],
+                        'confidence': confidence,
+                        'box': [x, y, w, h]
+                    })
         
         # Apply non-maximum suppression to remove overlapping boxes
         indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+        
+        # Final list of detected objects after NMS
+        final_detections = []
         
         # Draw bounding boxes and labels
         for i in range(len(boxes)):
@@ -127,6 +143,17 @@ class ObjectDetector:
                 
                 # Draw label text
                 cv2.putText(frame, label, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+                
+                # Add to final detections for notification
+                final_detections.append({
+                    'name': class_name,
+                    'confidence': confidence,
+                    'box': [x, y, w, h]
+                })
+        
+        # Send notifications for detected objects
+        if final_detections:
+            notification_manager.send_notification(final_detections, frame)
         
         return frame
 
@@ -274,10 +301,19 @@ async def status() -> Dict[str, Any]:
     """
     Get API status
     """
+    email_enabled = os.environ.get('EMAIL_NOTIFICATIONS', 'false').lower() == 'true'
+    recipient = os.environ.get('RECIPIENT_EMAIL', 'Not configured')
+    timeout = os.environ.get('NOTIFICATION_TIMEOUT', '300')
+    
     return {
         "status": "online",
         "timestamp": time.time(),
-        "detecting": os.environ.get('DETECTION_LABELS', 'person').split(',')
+        "detecting": os.environ.get('DETECTION_LABELS', 'person').split(','),
+        "notifications": {
+            "email_enabled": email_enabled,
+            "recipient": recipient if email_enabled else None,
+            "timeout": timeout if email_enabled else None
+        }
     }
 
 # Lifespan handler is defined at the top of the file

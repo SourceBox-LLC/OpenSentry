@@ -6,6 +6,9 @@ A security camera system that performs real-time object detection using OpenCV a
 
 - Live webcam-based object detection
 - Remote access to your security camera feed from anywhere
+- Email notifications when specified objects are detected
+- Snapshot images attached to notification emails
+- Configurable notification timeout to prevent alert flooding
 - FastAPI server with streaming capability
 - Cross-platform web client application
 - Customizable object detection (choose up to 10 classes)
@@ -146,6 +149,36 @@ To modify the detection sensitivity:
 2. Adjust the confidence threshold (default is 0.5) in the line: `if confidence > 0.5 and self.classes[class_id] in self.target_classes:`
 3. Lower values will detect more objects but may include more false positives
 4. Higher values will be more selective but might miss some objects
+
+## Email Notifications
+
+OpenSentry can send you email alerts with snapshot images when specified objects are detected in your security camera feed. This feature is highly configurable:
+
+### Setting Up Email Notifications
+
+1. Run the setup wizard:
+   ```
+   python setup.py
+   ```
+
+2. Choose option 2 (Configure email notifications) or option 3 (Configure both detection and notifications)
+
+3. Configure the following settings:
+   - Sender email address and password (for services like Gmail, you'll need to create an App Password)
+   - Recipient email address where alerts will be sent
+   - SMTP server settings (preconfigured options for Gmail, Outlook, and Yahoo are available)
+   - Notification timeout (minimum time between repeated alerts for the same object)
+
+### How Notifications Work
+
+- When an object from your configured detection list is detected, an email alert is sent
+- A snapshot image of the detection is attached to the email
+- To prevent alert flooding, notifications for the same object type are throttled according to your timeout setting
+- All snapshot images are saved in the `snapshots` directory for later review
+
+### Security Note
+
+Your email credentials are stored in the local `.env` file. If you're deploying this on a shared system, ensure appropriate file permissions are set to protect this sensitive information.
 
 ## Remote Access Configuration
 
